@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ลงทะเบียนนักเรียน - ระบบเช็คชื่อ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        body { font-family: 'Inter', 'Kanit', sans-serif; }
+        .loader { border-top-color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+    <div class="container mx-auto p-4 md:p-6 max-w-2xl">
+        <header class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="user-plus" class="text-blue-600 w-8 h-8"></i>
+                <h1 class="text-xl md:text-2xl font-bold">ลงทะเบียนนักเรียนใหม่</h1>
+            </div>
+            <button onclick="toggleTheme()" class="p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i data-lucide="sun" id="theme-icon-sun" class="hidden w-5 h-5"></i>
+                <i data-lucide="moon" id="theme-icon-moon" class="hidden w-5 h-5"></i>
+            </button>
+        </header>
+
+        <main class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <form id="registration-form" class="space-y-6">
+                <div>
+                    <label for="student-id" class="block text-sm font-medium mb-2">รหัสประจำตัวนักศึกษา *</label>
+                    <input type="text" id="student-id" required class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-transparent">
+                </div>
+
+                <div>
+                    <label for="student-name" class="block text-sm font-medium mb-2">ชื่อ-สกุล *</label>
+                    <input type="text" id="student-name" required class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-transparent">
+                </div>
+
+                <div>
+                    <label for="student-class" class="block text-sm font-medium mb-2">ห้อง *</label>
+                    <input type="text" id="student-class" required class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-transparent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">สแกนใบหน้า *</label>
+                    <div id="camera-section" class="space-y-4">
+                        <div class="text-center">
+                            <button type="button" onclick="startCamera()" id="start-camera-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center mx-auto gap-2">
+                                <i data-lucide="camera"></i><span>เปิดกล้อง</span>
+                            </button>
+                        </div>
+                        
+                        <div id="video-container" class="hidden">
+                            <div class="relative w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden aspect-video">
+                                <video id="video" class="w-full h-full" autoplay muted playsinline></video>
+                                <canvas id="overlay" class="absolute top-0 left-0"></canvas>
+                            </div>
+                            <div class="text-center mt-4 space-y-2">
+                                <p id="face-status" class="text-sm text-gray-600 dark:text-gray-400">กำลังรอตรวจจับใบหน้า...</p>
+                                <button type="button" onclick="captureFace()" id="capture-btn" disabled class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                    <i data-lucide="check-circle" class="inline w-5 h-5 mr-2"></i>ยืนยันภาพใบหน้า
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="captured-preview" class="hidden text-center">
+                            <p class="text-green-600 font-semibold mb-2">✓ บันทึกภาพใบหน้าเรียบร้อยแล้ว</p>
+                            <img id="preview-image" class="mx-auto rounded-lg max-w-xs" />
+                            <button type="button" onclick="retakeFace()" class="mt-2 text-blue-600 hover:underline">ถ่ายใหม่</button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="face-descriptor" required>
+                    <input type="hidden" id="face-image-data" required>
+                </div>
+
+                <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button type="submit" id="submit-btn" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2">
+                        <i data-lucide="save"></i><span>บันทึกข้อมูล</span>
+                    </button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <script>
+        const gasWebAppUrl = 'https://script.google.com/macros/s/AKfycby7oVeD7rqf2k9ACcuxHybd_nOQRXF65dN4wP2d39TdfUtSE1TTecNTShG7lQMXrKun/exec';
+        let videoStream = null;
+        let faceDescriptor = null;
+        let currentGeoLocation = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            toggleTheme(localStorage.getItem('theme') === 'dark');
+            await loadFaceApiModels();
+            getLocation();
+        });
+
+        function toggleTheme(isDark) {
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon-sun').classList.remove('hidden');
+                document.getElementById('theme-icon-moon').classList.add('hidden');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon-sun').classList.add('hidden');
+                document.getElementById('theme-icon-moon').classList.remove('hidden');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        async function loadFaceApiModels() {
+            try {
+                await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+                await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+                await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+                console.log('Face API models loaded.');
+            } catch (e) {
+                console.error("Error loading face-api models", e);
+                alert("ไม่สามารถโหลดโมเดลสแกนใบหน้าได้");
+            }
+        }
+
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => { 
+                        currentGeoLocation = { lat: position.coords.latitude, lng: position.coords.longitude }; 
+                        console.log('Location obtained:', currentGeoLocation);
+                    },
+                    (error) => { 
+                        console.warn('Could not get location:', error); 
+                    }
+                );
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                videoStream = stream;
+                const videoEl = document.getElementById('video');
+                videoEl.srcObject = stream;
+                
+                document.getElementById('start-camera-btn').classList.add('hidden');
+                document.getElementById('video-container').classList.remove('hidden');
+
+                videoEl.addEventListener('play', () => {
+                    const displaySize = { width: videoEl.clientWidth, height: videoEl.clientHeight };
+                    faceapi.matchDimensions(document.getElementById('overlay'), displaySize);
+                    
+                    setInterval(async () => {
+                        const detections = await faceapi.detectAllFaces(videoEl, new faceapi.TinyFaceDetectorOptions())
+                            .withFaceLandmarks()
+                            .withFaceDescriptors();
+                        
+                        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                        const canvas = document.getElementById('overlay');
+                        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                        faceapi.draw.drawDetections(canvas, resizedDetections);
+                        faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+
+                        const statusEl = document.getElementById('face-status');
+                        const captureBtn = document.getElementById('capture-btn');
+                        
+                        if (detections.length > 0) {
+                            faceDescriptor = detections[0].descriptor;
+                            statusEl.textContent = '✓ ตรวจจับใบหน้าสำเร็จ - กดปุ่มยืนยันเพื่อบันทึก';
+                            statusEl.className = 'text-sm text-green-600 font-semibold';
+                            captureBtn.disabled = false;
+                        } else {
+                            faceDescriptor = null;
+                            statusEl.textContent = 'กำลังรอตรวจจับใบหน้า...';
+                            statusEl.className = 'text-sm text-gray-600 dark:text-gray-400';
+                            captureBtn.disabled = true;
+                        }
+                    }, 300);
+                });
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                alert('ไม่สามารถเข้าถึงกล้องได้. โปรดตรวจสอบการอนุญาตและลองอีกครั้ง.');
+            }
+        }
+
+        function captureFace() {
+            if (!faceDescriptor) {
+                alert('ไม่พบข้อมูลใบหน้า กรุณาลองอีกครั้ง');
+                return;
+            }
+
+            const videoEl = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            canvas.width = videoEl.videoWidth;
+            canvas.height = videoEl.videoHeight;
+            canvas.getContext('2d').drawImage(videoEl, 0, 0);
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            document.getElementById('face-descriptor').value = JSON.stringify(Array.from(faceDescriptor));
+            document.getElementById('face-image-data').value = imageData;
+            document.getElementById('preview-image').src = imageData;
+
+            stopCamera();
+            document.getElementById('video-container').classList.add('hidden');
+            document.getElementById('captured-preview').classList.remove('hidden');
+        }
+
+        function retakeFace() {
+            document.getElementById('face-descriptor').value = '';
+            document.getElementById('face-image-data').value = '';
+            document.getElementById('captured-preview').classList.add('hidden');
+            document.getElementById('start-camera-btn').classList.remove('hidden');
+            faceDescriptor = null;
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+        }
+
+        document.getElementById('registration-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="loader w-6 h-6 rounded-full border-4 border-white"></div> กำลังบันทึก...';
+
+            const studentData = {
+                id: document.getElementById('student-id').value,
+                name: document.getElementById('student-name').value,
+                class: document.getElementById('student-class').value,
+                faceDescriptor: document.getElementById('face-descriptor').value,
+                imageData: document.getElementById('face-image-data').value
+            };
+
+            const response = await apiCall({ action: 'addStudent', data: studentData });
+
+            if (response.success) {
+                alert('ลงทะเบียนสำเร็จ! คุณสามารถเข้าใช้งานระบบเช็คชื่อได้แล้ว');
+                window.location.href = 'index.html';
+            } else {
+                alert('เกิดข้อผิดพลาด: ' + response.error);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i data-lucide="save"></i><span>บันทึกข้อมูล</span>';
+                lucide.createIcons();
+            }
+        });
+
+        async function apiCall(payload) {
+            if (!gasWebAppUrl || gasWebAppUrl.includes('YOUR_GAS_WEB_APP_ID')) {
+                alert('กรุณาตั้งค่า Google Apps Script URL ก่อน');
+                return { success: false, error: 'GAS URL not configured' };
+            }
+            try {
+                const response = await fetch(gasWebAppUrl, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('API Call Error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    </script>
+</body>
+</html>
